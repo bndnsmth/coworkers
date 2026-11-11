@@ -15,6 +15,7 @@ const deploy: Partial<{
   name: string
   model: string
   gateway: string
+  domain: string
   accessTeamDomain: string
   accessAud: string
   emailDomain: string
@@ -35,8 +36,10 @@ const WORKER_NAME = deploy.name ?? "coworkers"
  * (`/agents/*`), and the Durable Objects behind them. See `src/server.ts`.
  */
 export default defineConfig({
+  accountId: deploy.accountId,
   worker: {
     name: WORKER_NAME,
+    ...(deploy.domain ? { domains: [deploy.domain], workersDev: false } : {}),
     compatibilityDate: "2026-09-01",
     // No `experimental`: Cloudflare refuses to deploy Workers that set it
     // (error 10021), though @cloudflare/computer's README asks for it.
