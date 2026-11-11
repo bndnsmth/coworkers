@@ -26,8 +26,20 @@ Appearance and private-app-sharing can be reviewed independently. Shared bots
 builds on private-app-sharing and includes both chat and computer access in one
 branch. Compare shared-bots against private-app-sharing. The former separate
 shared-computer branch was consolidated into shared-bots without changing code.
-Do not submit the combined deployment branch upstream. No pull requests have
-been opened.
+Do not submit the combined deployment branch upstream.
+
+### Upstream pull requests
+
+All three PRs target upstream `main`:
+
+- [#24 — Appearance settings and system-aware workspace theming](https://github.com/fayazara/coworkers/pull/24)
+- [#23 — Private app sharing with scoped permissions and isolation](https://github.com/fayazara/coworkers/pull/23)
+- [#25 — Shared bots with member chat and full computer access](https://github.com/fayazara/coworkers/pull/25)
+
+Merge #23 before #25. Until the prerequisite lands, #25 includes its commits;
+review the [incremental shared-bots comparison](https://github.com/bndnsmth/coworkers/compare/feature/private-app-sharing...feature/shared-bots)
+for only the chat and computer additions. Appearance is independent and
+cross-references the overlapping upstream theme proposals #20 and #22.
 
 ## Current production record
 
@@ -69,9 +81,9 @@ git switch -c feature/example main
 git push -u origin feature/example
 ```
 
-If contributing upstream later, submit Appearance and private-app-sharing
-against upstream `main`. Submit shared-bots after private-app-sharing lands,
-rebasing onto the accepted version so its PR contains only the remaining feature.
+Keep each contribution updated on its feature branch. After private-app-sharing
+lands, rebase shared-bots onto the accepted version so #25 contains only the
+remaining feature changes, accounting for any upstream squash or rework.
 Keep production composition on the deployment line, not on `main`.
 
 ## Compose and deploy a release
