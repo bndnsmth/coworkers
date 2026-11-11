@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@cloudflare/kumo/components/button"
 import { Loader } from "@cloudflare/kumo/components/loader"
 import { Select } from "@cloudflare/kumo/components/select"
+import { Switch } from "@cloudflare/kumo/components/switch"
 import { Tooltip } from "@cloudflare/kumo/components/tooltip"
 import {
   AppWindowIcon,
@@ -15,7 +16,7 @@ import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
 import { useBot } from "@/lib/bot-context"
 import type { BotConnection } from "@/lib/bot-context"
-import type { AppLink, BotAppDetail } from "@/lib/types"
+import type { AppLink, BotAppDetail, BotAppSummary } from "@/lib/types"
 
 const MODE_LABELS: Record<AppLink["mode"], string> = {
   edit: "Can edit",
@@ -120,7 +121,7 @@ const THUMB_WIDTH = 880
 const THUMB_HEIGHT = 550
 
 /** A live, non-interactive render of the app, scaled to the card. */
-function AppThumbnail({ app, path }: { app: BotAppDetail; path?: string }) {
+function AppThumbnail({ app, path }: { app: BotAppSummary; path?: string }) {
   const [scale, setScale] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const frame = useRef<HTMLDivElement>(null)
@@ -172,6 +173,89 @@ function AppThumbnail({ app, path }: { app: BotAppDetail; path?: string }) {
   )
 }
 
+/** Bot members use the same apps, without managing external sharing links. */
+export function SharedAppsPane({
+  apps,
+}: {
+  apps: (BotAppSummary & { path: string })[]
+}) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const app = apps.find((item) => item.slug === selected)
+  if (app)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex items-center gap-1 pt-1 pr-4 pb-2 pl-2">
+          <button
+            type="button"
+            aria-label="All apps"
+            className="icon-btn"
+            onClick={() => setSelected(null)}
+          >
+            <ArrowLeftIcon size={16} />
+          </button>
+          <h3 className="min-w-0 flex-1 truncate text-sm font-medium">
+            {app.name}
+          </h3>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<ArrowSquareOutIcon />}
+            className="rounded-full"
+            onClick={() => window.open(app.path, "_blank", "noopener")}
+          >
+            Open
+          </Button>
+        </div>
+        <div className="mx-4 min-h-[480px] flex-1 overflow-hidden rounded-2xl bg-white outline outline-1 -outline-offset-1 outline-black/[0.06]">
+          <iframe
+            key={app.version}
+            title={`${app.name} preview`}
+            src={app.path}
+            sandbox="allow-scripts allow-forms allow-popups allow-modals"
+            className="size-full min-h-[480px]"
+          />
+        </div>
+        <p className="px-5 py-3 text-xs text-kumo-subtle">
+          You can edit app data and message the bot. External sharing is managed
+          by the owner.
+        </p>
+      </div>
+    )
+  if (!apps.length)
+    return (
+      <div className="flex flex-1 items-center justify-center pb-16">
+        <EmptyState
+          icon={<AppWindowIcon size={24} />}
+          title="No apps yet"
+          description="Ask the bot to build one, like a page for your next trip."
+        />
+      </div>
+    )
+  return (
+    <ul className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-5 overflow-y-auto px-4 pt-2 pb-4">
+      {apps.map((item) => (
+        <li key={item.slug}>
+          <button
+            type="button"
+            onClick={() => setSelected(item.slug)}
+            className="group pressable flex w-full flex-col gap-2.5 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-kumo-focus focus-visible:ring-offset-4 focus-visible:ring-offset-kumo-canvas"
+          >
+            <AppThumbnail app={item} path={item.path} />
+            <span className="min-w-0 px-0.5">
+              <span className="block truncate text-sm font-medium">
+                {item.name}
+              </span>
+              <span className="block text-xs text-kumo-subtle">
+                Can edit · {formatAgo(item.updatedAt)}
+              </span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function AppDetail({
   agent,
   app,
@@ -186,25 +270,45 @@ function AppDetail({
   const owner = app.links.find((l) => l.owner)
   const shared = app.links.filter((l) => !l.owner)
   const [label, setLabel] = useState("")
-  const [mode, setMode] = useState<AppLink["mode"]>("edit")
+  const [mode, setMode] = useState<AppLink["mode"]>("view")
+  const [audience, setAudience] = useState<"link" | "email">("link")
+  const [email, setEmail] = useState("")
+  const [canMessage, setCanMessage] = useState(false)
+  const [error, setError] = useState("")
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   async function share() {
     setCreating(true)
+    setError("")
     try {
-      await agent.stub.createAppLink(app.slug, label, mode)
+      await agent.stub.createAppLink(app.slug, label, mode, {
+        audience,
+        email: audience === "email" ? email : undefined,
+        canMessage,
+      })
       setLabel("")
+      setEmail("")
+      setMode("view")
+      setCanMessage(false)
       await onChanged()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not create sharing link"
+      )
     } finally {
       setCreating(false)
     }
   }
 
   async function revoke(token: string) {
-    await agent.stub.revokeAppLink(token)
-    await onChanged()
+    try {
+      await agent.stub.revokeAppLink(token)
+      await onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not revoke access")
+    }
   }
 
   async function remove() {
@@ -264,17 +368,21 @@ function AppDetail({
 
       <div className="space-y-2 px-4 pt-6 pb-4">
         <h4 className="px-1.5 text-sm font-medium text-kumo-default">
-          People with access
+          Access and sharing
         </h4>
         <ul className="overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-black/[0.06]">
           {owner ? (
-            <PersonRow name="You" detail="Owner" path={owner.path} />
+            <PersonRow
+              name="You"
+              detail="Private · sign-in required"
+              path={owner.path}
+            />
           ) : null}
           {shared.map((link) => (
             <PersonRow
               key={link.token}
               name={link.label}
-              detail={MODE_LABELS[link.mode]}
+              detail={`${MODE_LABELS[link.mode]} · ${link.audience === "email" ? link.email : "Anyone with this secret link"}${link.canMessage ? " · Can message bot" : ""}`}
               path={link.path}
               onRevoke={() => void revoke(link.token)}
             />
@@ -285,8 +393,51 @@ function AppDetail({
                 e.preventDefault()
                 if (label.trim()) void share()
               }}
-              className="flex min-h-14 items-center gap-2 py-3 pr-3 pl-4"
+              className="flex min-h-14 flex-wrap items-center gap-2 py-3 pr-3 pl-4"
             >
+              <label className="flex w-full flex-col gap-1 text-xs text-kumo-subtle">
+                Who can open this app?
+                <select
+                  aria-label="Sharing audience"
+                  value={audience}
+                  onChange={(e) =>
+                    setAudience(e.target.value as "link" | "email")
+                  }
+                  className="h-10 rounded-lg border border-kumo-line bg-kumo-base px-2 text-sm text-kumo-default"
+                >
+                  <option value="link">Anyone with a secret link</option>
+                  <option value="email">
+                    Only this email (sign-in required)
+                  </option>
+                </select>
+              </label>
+              {audience === "email" ? (
+                <input
+                  type="email"
+                  required
+                  maxLength={254}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="recipient@example.com"
+                  aria-label="Recipient email"
+                  className="h-10 w-full rounded-lg border border-kumo-line bg-kumo-base px-3 text-sm"
+                />
+              ) : null}
+              <div className="flex min-h-11 w-full items-center justify-between gap-3 text-sm">
+                <span>Allow bot messages</span>
+                <Switch
+                  aria-label="Allow messaging the bot"
+                  checked={canMessage}
+                  onCheckedChange={setCanMessage}
+                />
+              </div>
+              {canMessage ? (
+                <p className="w-full text-xs text-pretty text-kumo-subtle">
+                  Allows messages and automatic error reports. Private account
+                  context stays isolated; connected-account changes need your
+                  approval.
+                </p>
+              ) : null}
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-(--fill-hover) text-kumo-subtle">
                 <PlusIcon size={14} />
               </span>
@@ -294,8 +445,8 @@ function AppDetail({
                 value={label}
                 maxLength={40}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="Add a person"
-                aria-label="Name of the person to share with"
+                placeholder="Label for this link"
+                aria-label="Label for this sharing link"
                 className="h-8 min-w-0 flex-1 bg-transparent text-sm text-kumo-default outline-none placeholder:text-kumo-placeholder"
               />
               <Select
@@ -321,6 +472,17 @@ function AppDetail({
             </form>
           </li>
         </ul>
+        <p className="px-1.5 text-xs text-pretty text-kumo-subtle">
+          Apps are private until you explicitly create a sharing link. Sharing
+          an app never shares its bot’s chat or settings. Revoke and create a
+          new link to change permissions. Email recipients must be allowed to
+          sign in through Cloudflare Access.
+        </p>
+        {error ? (
+          <p role="alert" className="px-1.5 text-sm text-kumo-danger">
+            {error}
+          </p>
+        ) : null}
         <p className="px-1.5 text-xs text-pretty text-kumo-subtle">
           Anyone with a link can open the app without signing in, so share it
           like a password. Edits reach the bot under that person's name.

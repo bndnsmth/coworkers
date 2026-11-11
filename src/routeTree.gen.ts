@@ -19,6 +19,7 @@ import { Route as AppPipelinesIndexRouteImport } from './routes/_app/pipelines.i
 import { Route as AppPipelinesPipelineIdRouteImport } from './routes/_app/pipelines.$pipelineId'
 import { Route as AppBotsBotIdComputerRouteImport } from './routes/_app/bots.$botId.computer'
 import { Route as AppBotsBotIdSettingsRouteImport } from './routes/_app/bots.$botId.settings'
+import { Route as AppSharedOwnerIdBotIdRouteImport } from './routes/_app/shared.$ownerId.$botId'
 import { Route as ApiHooksUserIdBotIdTokenRouteImport } from './routes/api/hooks.$userId.$botId.$token'
 
 const AppRoute = AppRouteImport.update({
@@ -70,6 +71,11 @@ const AppBotsBotIdSettingsRoute = AppBotsBotIdSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppBotsBotIdRoute,
 } as any)
+const AppSharedOwnerIdBotIdRoute = AppSharedOwnerIdBotIdRouteImport.update({
+  id: '/shared/$ownerId/$botId',
+  path: '/shared/$ownerId/$botId',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiHooksUserIdBotIdTokenRoute =
   ApiHooksUserIdBotIdTokenRouteImport.update({
     id: '/api/hooks/$userId/$botId/$token',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/pipelines/': typeof AppPipelinesIndexRoute
   '/bots/$botId/computer': typeof AppBotsBotIdComputerRoute
   '/bots/$botId/settings': typeof AppBotsBotIdSettingsRoute
+  '/shared/$ownerId/$botId': typeof AppSharedOwnerIdBotIdRoute
   '/api/hooks/$userId/$botId/$token': typeof ApiHooksUserIdBotIdTokenRoute
 }
 export interface FileRoutesByTo {
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/pipelines': typeof AppPipelinesIndexRoute
   '/bots/$botId/computer': typeof AppBotsBotIdComputerRoute
   '/bots/$botId/settings': typeof AppBotsBotIdSettingsRoute
+  '/shared/$ownerId/$botId': typeof AppSharedOwnerIdBotIdRoute
   '/api/hooks/$userId/$botId/$token': typeof ApiHooksUserIdBotIdTokenRoute
 }
 export interface FileRoutesById {
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/_app/pipelines/': typeof AppPipelinesIndexRoute
   '/_app/bots/$botId/computer': typeof AppBotsBotIdComputerRoute
   '/_app/bots/$botId/settings': typeof AppBotsBotIdSettingsRoute
+  '/_app/shared/$ownerId/$botId': typeof AppSharedOwnerIdBotIdRoute
   '/api/hooks/$userId/$botId/$token': typeof ApiHooksUserIdBotIdTokenRoute
 }
 export interface FileRouteTypes {
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/pipelines/'
     | '/bots/$botId/computer'
     | '/bots/$botId/settings'
+    | '/shared/$ownerId/$botId'
     | '/api/hooks/$userId/$botId/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/pipelines'
     | '/bots/$botId/computer'
     | '/bots/$botId/settings'
+    | '/shared/$ownerId/$botId'
     | '/api/hooks/$userId/$botId/$token'
   id:
     | '__root__'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/_app/pipelines/'
     | '/_app/bots/$botId/computer'
     | '/_app/bots/$botId/settings'
+    | '/_app/shared/$ownerId/$botId'
     | '/api/hooks/$userId/$botId/$token'
   fileRoutesById: FileRoutesById
 }
@@ -234,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBotsBotIdSettingsRouteImport
       parentRoute: typeof AppBotsBotIdRoute
     }
+    '/_app/shared/$ownerId/$botId': {
+      id: '/_app/shared/$ownerId/$botId'
+      path: '/shared/$ownerId/$botId'
+      fullPath: '/shared/$ownerId/$botId'
+      preLoaderRoute: typeof AppSharedOwnerIdBotIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/hooks/$userId/$botId/$token': {
       id: '/api/hooks/$userId/$botId/$token'
       path: '/api/hooks/$userId/$botId/$token'
@@ -264,6 +283,7 @@ interface AppRouteChildren {
   AppBotsBotIdRoute: typeof AppBotsBotIdRouteWithChildren
   AppPipelinesPipelineIdRoute: typeof AppPipelinesPipelineIdRoute
   AppPipelinesIndexRoute: typeof AppPipelinesIndexRoute
+  AppSharedOwnerIdBotIdRoute: typeof AppSharedOwnerIdBotIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -272,6 +292,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBotsBotIdRoute: AppBotsBotIdRouteWithChildren,
   AppPipelinesPipelineIdRoute: AppPipelinesPipelineIdRoute,
   AppPipelinesIndexRoute: AppPipelinesIndexRoute,
+  AppSharedOwnerIdBotIdRoute: AppSharedOwnerIdBotIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

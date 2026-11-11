@@ -1,4 +1,6 @@
 import type { AppLink, BotAppSummary } from "@/lib/types"
+import { canUseAppLink, isBotMember } from "@/lib/sharing"
+import type { BotSharing } from "@/lib/sharing"
 
 /**
  * Apps a bot built, the links that open them, and the data they show.
@@ -59,6 +61,12 @@ type LinkRow = {
   mode: "edit" | "view"
   owner: number
   created_at: number
+  audience: NonNullable<AppLink["audience"]>
+  email: string | null
+  can_message: number
+  expires_at: number | null
+  parent_token: string | null
+  viewer_email: string | null
 }
 
 type ItemRow = {
@@ -120,6 +128,31 @@ export class AppStore {
       updated_by TEXT NOT NULL,
       PRIMARY KEY (app, collection, id)
     )`)
+    const columns = new Set(
+      this.sql
+        .exec<{ name: string }>(`PRAGMA table_info(app_links)`)
+        .toArray()
+        .map((c) => c.name)
+    )
+    for (const [name, type] of Object.entries({
+      audience: "TEXT NOT NULL DEFAULT 'link'",
+      email: "TEXT",
+      can_message: "INTEGER NOT NULL DEFAULT 0",
+      expires_at: "INTEGER",
+      parent_token: "TEXT",
+      viewer_email: "TEXT",
+    })) {
+      if (!columns.has(name))
+        this.sql.exec(`ALTER TABLE app_links ADD COLUMN ${name} ${type}`)
+    }
+    // Existing owner URLs were bearer credentials. They now require login.
+    this.sql.exec(
+      `UPDATE app_links SET audience = 'owner', can_message = 1 WHERE owner = 1`
+    )
+    this.sql.exec(
+      `DELETE FROM app_links WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+      Date.now()
+    )
   }
 
   // ── Apps ────────────────────────────────────────────────────────────
@@ -188,21 +221,53 @@ export class AppStore {
         owner: r.owner === 1,
         createdAt: r.created_at,
         path: this.linkPath(slug, r.token),
+        audience: r.audience,
+        email: r.email ?? undefined,
+        canMessage: r.can_message === 1,
+        expiresAt: r.expires_at ?? undefined,
+        parentToken: r.parent_token ?? undefined,
+        viewerEmail: r.viewer_email ?? undefined,
       }))
   }
 
   ownerLink(slug: string): AppLink {
     const existing = this.links(slug).find((l) => l.owner)
     if (existing) return existing
-    return this.createLink(slug, "You", "edit", true)
+    return this.createLink(slug, "You", "edit", true, {
+      audience: "owner",
+      canMessage: true,
+    })
+  }
+
+  botLink(slug: string, mode: AppLink["mode"] = "edit") {
+    return (
+      this.links(slug).find((l) => l.audience === "bot" && l.mode === mode) ??
+      this.createLink(slug, "Bot service", mode, false, {
+        audience: "bot",
+        canMessage: false,
+      })
+    )
   }
 
   createLink(
     slug: string,
     label: string,
     mode: AppLink["mode"],
-    owner = false
+    owner = false,
+    options: Pick<
+      AppLink,
+      | "audience"
+      | "email"
+      | "canMessage"
+      | "expiresAt"
+      | "parentToken"
+      | "viewerEmail"
+    > = {}
   ): AppLink {
+    this.sql.exec(
+      `DELETE FROM app_links WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+      Date.now()
+    )
     const token = newToken()
     this.sql.exec(
       `INSERT INTO app_links (token, slug, label, mode, owner, created_at)
@@ -214,6 +279,16 @@ export class AppStore {
       owner ? 1 : 0,
       Date.now()
     )
+    this.sql.exec(
+      `UPDATE app_links SET audience = ?, email = ?, can_message = ?, expires_at = ?, parent_token = ?, viewer_email = ? WHERE token = ?`,
+      options.audience ?? "link",
+      options.email ?? null,
+      options.canMessage ? 1 : 0,
+      options.expiresAt ?? null,
+      options.parentToken ?? null,
+      options.viewerEmail ?? null,
+      token
+    )
     return this.links(slug).find((l) => l.token === token)!
   }
 
@@ -223,7 +298,11 @@ export class AppStore {
       .exec<LinkRow>(`SELECT * FROM app_links WHERE token = ?`, token)
       .toArray()[0]
     if (!row) return null
-    this.sql.exec(`DELETE FROM app_links WHERE token = ?`, token)
+    this.sql.exec(
+      `DELETE FROM app_links WHERE token = ? OR parent_token = ?`,
+      token,
+      token
+    )
     if (row.owner === 1) this.ownerLink(row.slug)
     return { slug: row.slug }
   }
@@ -237,17 +316,54 @@ export class AppStore {
       )
       .toArray()[0]
     if (!row) return null
-    return {
-      token: row.token,
-      label: row.label,
-      mode: row.mode,
-      owner: row.owner === 1,
-      createdAt: row.created_at,
-      path: this.linkPath(slug, row.token),
-    }
+    if (row.expires_at && row.expires_at <= Date.now()) return null
+    if (row.parent_token && !this.findLink(slug, row.parent_token)) return null
+    return this.links(slug).find((l) => l.token === row.token) ?? null
   }
 
   // ── Data ────────────────────────────────────────────────────────────
+
+  authorize(
+    slug: string,
+    token: string,
+    viewer: { id: string; email: string | null } | null,
+    ownerId: string,
+    sharing: BotSharing
+  ): AppLink | null {
+    const link = this.findLink(slug, token)
+    if (!link) return null
+    if (link.audience === "session" && link.viewerEmail && link.parentToken) {
+      const parent = this.findLink(slug, link.parentToken)
+      if (
+        parent?.audience === "owner" &&
+        !isBotMember(sharing, link.viewerEmail)
+      )
+        return null
+      // Upgrade existing member sessions too; explicit external shares retain
+      // their own independent permissions.
+      if (parent?.audience === "owner")
+        return { ...link, mode: "edit", canMessage: true }
+    }
+    const owner = viewer?.id === ownerId
+    const member = isBotMember(sharing, viewer?.email ?? null)
+    if (!canUseAppLink(link, viewer?.email ?? null, owner, member)) return null
+    if (link.audience !== "owner" && link.audience !== "email") return link
+    return this.createLink(
+      slug,
+      owner ? "You" : viewer!.email!,
+      link.audience === "owner" && !owner ? "edit" : link.mode,
+      false,
+      {
+        audience: "session",
+        parentToken: token,
+        expiresAt: Date.now() + 15 * 60_000,
+        viewerEmail:
+          link.audience === "owner" && !owner ? viewer!.email! : undefined,
+        canMessage:
+          link.audience === "owner" && !owner ? true : link.canMessage,
+      }
+    )
+  }
 
   collections(slug: string) {
     return this.sql
