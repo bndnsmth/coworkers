@@ -8,19 +8,30 @@ import {
   AppWindowIcon,
   ArrowLeftIcon,
   ArrowSquareOutIcon,
+  PlugsConnectedIcon,
   PlusIcon,
   TrashIcon,
   XIcon,
 } from "@/components/icons"
 import { CopyButton } from "@/components/copy-button"
 import { EmptyState } from "@/components/empty-state"
+import { Group, Row } from "@/components/group"
 import { useBot } from "@/lib/bot-context"
 import type { BotConnection } from "@/lib/bot-context"
-import type { AppLink, BotAppDetail, BotAppSummary } from "@/lib/types"
+import { approvalKey } from "@/lib/types"
+import type { AppLink, AppToolGrant, BotAppDetail, BotAppSummary } from "@/lib/types"
 
 const MODE_LABELS: Record<AppLink["mode"], string> = {
   edit: "Can edit",
   view: "View only",
+  submit: "Can submit",
+}
+
+/** Under the link's name in the list. */
+const MODE_DETAILS: Record<AppLink["mode"], string> = {
+  edit: MODE_LABELS.edit,
+  view: MODE_LABELS.view,
+  submit: "Public form · sees only their own entry",
 }
 
 function absolute(path: string) {
@@ -121,7 +132,7 @@ const THUMB_WIDTH = 880
 const THUMB_HEIGHT = 550
 
 /** A live, non-interactive render of the app, scaled to the card. */
-function AppThumbnail({ app, path }: { app: BotAppSummary; path?: string }) {
+function AppThumbnail({ app, path }: { app: BotAppSummary & { approvedTools?: string[] }; path?: string }) {
   const [scale, setScale] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const frame = useRef<HTMLDivElement>(null)
@@ -151,7 +162,7 @@ function AppThumbnail({ app, path }: { app: BotAppSummary; path?: string }) {
       </span>
       {path && scale > 0 ? (
         <iframe
-          key={app.version}
+          key={`${app.version}:${app.approvedTools?.join(",") ?? ""}`}
           src={path}
           title=""
           aria-hidden
@@ -275,6 +286,10 @@ function AppDetail({
   const [email, setEmail] = useState("")
   const [canMessage, setCanMessage] = useState(false)
   const [error, setError] = useState("")
+  const hasForm = app.access.submit.length > 0
+  const modes = hasForm
+    ? MODE_LABELS
+    : { edit: MODE_LABELS.edit, view: MODE_LABELS.view }
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -352,7 +367,7 @@ function AppDetail({
       {owner ? (
         <div className="mx-4 aspect-[16/10] shrink-0 overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-kumo-line">
           <iframe
-            key={app.version}
+            key={`${app.version}:${app.approvedTools.join(",")}`}
             title={`${app.name} preview`}
             src={owner.path}
             sandbox="allow-scripts allow-forms allow-popups allow-modals"
@@ -365,6 +380,10 @@ function AppDetail({
         Updated {formatAgo(app.updatedAt)}
         {app.collections.map((c) => ` · ${c.count} ${c.name}`).join("")}
       </p>
+
+      {app.tools.length > 0 ? (
+        <AppToolsSection agent={agent} app={app} onChanged={onChanged} />
+      ) : null}
 
       <div className="space-y-2 px-4 pt-6 pb-4">
         <h4 className="px-1.5 text-sm font-medium text-kumo-default">
@@ -382,7 +401,7 @@ function AppDetail({
             <PersonRow
               key={link.token}
               name={link.label}
-              detail={`${MODE_LABELS[link.mode]} · ${link.audience === "email" ? link.email : "Anyone with this secret link"}${link.canMessage ? " · Can message bot" : ""}`}
+              detail={`${MODE_DETAILS[link.mode]} · ${link.audience === "email" ? link.email : "Anyone with this secret link"}${link.canMessage ? " · Can message bot" : ""}`}
               path={link.path}
               onRevoke={() => void revoke(link.token)}
             />
@@ -454,7 +473,7 @@ function AppDetail({
                 size="sm"
                 className="w-28 shrink-0"
                 value={mode}
-                items={MODE_LABELS}
+                items={modes}
                 onValueChange={(value) =>
                   value && setMode(value as AppLink["mode"])
                 }
@@ -484,8 +503,11 @@ function AppDetail({
           </p>
         ) : null}
         <p className="px-1.5 text-xs text-pretty text-kumo-subtle">
-          Anyone with a link can open the app without signing in, so share it
-          like a password. Edits reach the bot under that person's name.
+          {audience === "email"
+            ? "Only the invited email can sign in and open this link."
+            : mode === "submit"
+            ? "Anyone with this link can fill in the form without signing in. They can't see other entries, and can send a few per hour."
+            : "Anyone with a link can open the app without signing in, so share it like a password. Edits reach the bot under that person's name."}
         </p>
       </div>
 
@@ -524,6 +546,137 @@ function AppDetail({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Where a limited tool may act, from its other limits, e.g. "Primary calendar account only". */
+function whereNote(g: AppToolGrant) {
+  const names = (g.only ?? [])
+    .slice(1)
+    .map((scope) => scope.allow.map((a) => a.label ?? a.value).join(", "))
+  return names.length ? `${names.join(" · ")} only` : ""
+}
+
+/** One action an app may take, as a row: what it does, whether it changes things. */
+function ToolActionRow({
+  label,
+  title,
+  reads,
+  where,
+  allowed,
+}: {
+  label: string
+  title?: string
+  reads: boolean
+  where: string
+  allowed: boolean
+}) {
+  return (
+    <Row
+      icon={<PlugsConnectedIcon size={14} />}
+      label={<span title={title}>{label}</span>}
+      detail={[reads ? "Reads" : "Changes things", where]
+        .filter(Boolean)
+        .join(" · ")}
+    >
+      {allowed ? null : (
+        <span className="shrink-0 text-xs text-kumo-subtle">Not allowed</span>
+      )}
+    </Row>
+  )
+}
+
+/** Tools on the user's apps that the app's server code may call live. */
+function AppToolsSection({
+  agent,
+  app,
+  onChanged,
+}: {
+  agent: BotConnection
+  app: BotAppDetail
+  onChanged: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const allowed = (g: AppToolGrant) =>
+    app.approvedTools.includes(approvalKey(g))
+  const pending = app.tools.filter((g) => !allowed(g))
+  const writes = app.tools.some(
+    (g) =>
+      !g.readOnly &&
+      (!g.only || g.only.some((o) => o.allow.some((a) => !a.reads)))
+  )
+
+  async function run(action: "approve" | "revoke") {
+    setBusy(true)
+    try {
+      if (action === "approve") await agent.stub.approveAppTools(app.slug)
+      else await agent.stub.revokeAppTools(app.slug)
+      await onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const apps = [...new Set(app.tools.map((g) => g.app))].join(" and ")
+
+  return (
+    <div className="px-4 pt-6">
+      <Group
+        title={`Uses your ${apps}`}
+        action={
+          pending.length > 0 ? (
+            <Button
+              size="sm"
+              variant="primary"
+              className="btn-ink rounded-full"
+              loading={busy}
+              onClick={() => void run("approve")}
+            >
+              Allow
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="rounded-full"
+              loading={busy}
+              onClick={() => void run("revoke")}
+            >
+              Turn off
+            </Button>
+          )
+        }
+        hint={
+          writes
+            ? "Anyone who opens this app can trigger these. Each change shows in Activity."
+            : "Anyone who opens this app can trigger these. The page shows only what the bot's code returns."
+        }
+      >
+        {app.tools.flatMap((g) =>
+          g.only?.length
+            ? g.only[0]!.allow.map((a) => (
+                <ToolActionRow
+                  key={`${g.name}:${a.value}`}
+                  label={a.label ?? a.value}
+                  title={a.value}
+                  reads={g.readOnly || a.reads}
+                  where={whereNote(g)}
+                  allowed={allowed(g)}
+                />
+              ))
+            : [
+                <ToolActionRow
+                  key={g.name}
+                  label={g.description || g.tool}
+                  title={g.tool}
+                  reads={g.readOnly}
+                  where={g.readOnly ? "" : "with anything it asks"}
+                  allowed={allowed(g)}
+                />,
+              ]
+        )}
+      </Group>
     </div>
   )
 }

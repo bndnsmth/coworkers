@@ -131,12 +131,12 @@ export type SharedWorkspaceAction = z.infer<typeof sharedWorkspaceActionSchema>
 export const SHARING_DIRECTORY = "__coworkers_sharing_directory__"
 
 export function appOperationDenied(
-  caller: { mode: "view" | "edit"; canMessage?: boolean },
+  caller: { mode: "view" | "edit" | "submit"; canMessage?: boolean },
   op: string
 ): string | null {
   if ((op === "tell" || op === "error") && !caller.canMessage)
     return "Messaging the bot is disabled for this link"
-  if ((op === "put" || op === "remove") && caller.mode !== "edit")
+  if ((op === "put" && caller.mode === "view") || (op === "remove" && caller.mode !== "edit"))
     return "This link is view-only"
   return null
 }

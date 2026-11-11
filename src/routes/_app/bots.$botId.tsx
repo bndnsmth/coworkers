@@ -14,6 +14,7 @@ import {
   redirect,
   useMatchRoute,
   useNavigate,
+  useSearch,
 } from "@tanstack/react-router"
 import { useAgent } from "agents/react"
 import { useAgentChat } from "@cloudflare/think/react"
@@ -25,6 +26,7 @@ import { AppsPane } from "@/components/apps-pane"
 import { Composer } from "@/components/composer"
 import { ComputerPanel } from "@/components/computer-panel"
 import { SettingsPanel } from "@/components/settings-panel"
+import { ShopProductPanel } from "@/components/shop-product-panel"
 import { SidePanel } from "@/components/side-panel"
 import { useLatchedWhileClosing } from "@/components/slide-shell"
 import { SplitView } from "@/components/split-view"
@@ -39,7 +41,7 @@ import type { UIMessage } from "ai"
 import type { BotAgent } from "@/agents/bot-agent"
 import type { BrowserNav } from "@/components/computer-card"
 import type { OnApproval, OnScriptApproval } from "@/components/thread"
-import type { BotState } from "@/lib/types"
+import type { BotState, MessageMeta } from "@/lib/types"
 
 interface ApprovalResponse {
   id: string
@@ -166,24 +168,36 @@ function BotLayout({
   botId,
   state,
   agent,
+  send,
+  busy,
   children,
 }: {
   botId: string
   state: BotState
   agent: ReturnType<typeof useAgent<BotAgent, BotState>> | null
+  send?: (text: string, meta?: Omit<MessageMeta, "at">) => void
+  busy?: boolean
   children: React.ReactNode
 }) {
   const matchRoute = useMatchRoute()
   const computerOpen = !!matchRoute({ to: "/bots/$botId/computer" })
   const settingsOpen = !!matchRoute({ to: "/bots/$botId/settings" })
-  const panel = computerOpen ? "computer" : settingsOpen ? "settings" : null
+  const productOpen = !!matchRoute({ to: "/bots/$botId/product" })
+  const productId = (useSearch({ strict: false }) as { id?: string }).id
+  const panel = computerOpen
+    ? "computer"
+    : settingsOpen
+      ? "settings"
+      : productOpen && productId
+        ? `product:${productId}`
+        : null
   // Keep the closing panel's content on screen while it slides away.
   const shownPanel = useLatchedWhileClosing(panel, panel !== null)
   const { widths, setWidth } = useLayout()
   const navigate = useNavigate()
   const context = useMemo(
-    () => ({ botId, state, agent }),
-    [botId, state, agent]
+    () => ({ botId, state, agent, send, busy }),
+    [botId, state, agent, send, busy]
   )
 
   return (
@@ -191,7 +205,13 @@ function BotLayout({
       <SplitView
         id="bot"
         side="right"
-        label={shownPanel === "computer" ? "Computer" : "Settings"}
+        label={
+          shownPanel === "computer"
+            ? "Computer"
+            : shownPanel === "settings"
+              ? "Settings"
+              : "Product"
+        }
         open={panel !== null}
         width={widths.panel ?? "44vw"}
         minWidth={360}
@@ -210,6 +230,12 @@ function BotLayout({
             <SidePanel title="Settings">
               <SettingsPanel />
             </SidePanel>
+          ) : shownPanel?.startsWith("product:") ? (
+            // Remount per product: tapping another card starts it fresh.
+            <ShopProductPanel
+              key={shownPanel}
+              productId={shownPanel.slice("product:".length)}
+            />
           ) : null
         }
       >
@@ -373,8 +399,20 @@ function LiveBot({
     [agent]
   )
 
+  const send = useCallback(
+    (text: string, meta?: Omit<MessageMeta, "at">) =>
+      void chat.sendMessage({ text, metadata: { ...meta, at: Date.now() } }),
+    [chat]
+  )
+
   return (
-    <BotLayout botId={botId} state={state} agent={agent}>
+    <BotLayout
+      botId={botId}
+      state={state}
+      agent={agent}
+      send={send}
+      busy={busy}
+    >
       <Thread
         bot={state}
         messages={chat.messages}
@@ -420,9 +458,7 @@ function LiveBot({
       <Composer
         botName={state.name}
         busy={busy}
-        onSend={(text) =>
-          void chat.sendMessage({ text, metadata: { at: Date.now() } })
-        }
+        onSend={(text) => send(text)}
         onStop={() => void chat.stop()}
         onAttach={onAttach}
         bots={mentionable}
