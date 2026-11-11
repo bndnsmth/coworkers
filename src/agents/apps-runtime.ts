@@ -72,7 +72,11 @@ export interface AppCaller {
 
 /** The part of a caller an app may see. */
 export function publicCaller(caller: AppCaller) {
-  return { label: caller.label, mode: caller.mode, canMessage: caller.canMessage ?? false }
+  return {
+    label: caller.label,
+    mode: caller.mode,
+    canMessage: caller.canMessage ?? false,
+  }
 }
 
 export function appLiveName(userId: string, botId: string, slug: string) {
@@ -420,9 +424,9 @@ export class AppBinding extends WorkerEntrypoint<Env, AppBindingProps> {
 
   /** The app tools this app asked for, and whether each is allowed. */
   async tools() {
-    const { userId, botId, slug } = this.ctx.props
+    const { userId, botId, slug, caller } = this.ctx.props
     const bot = await botStub(this.env, userId, botId)
-    return bot.appToolList(slug)
+    return bot.appToolList(slug, caller)
   }
 }
 

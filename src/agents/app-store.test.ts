@@ -156,6 +156,10 @@ describe("durable app sharing", () => {
       canMessage: true,
     })
     expect(owner.token).not.toBe(token)
+    expect(
+      store.authorize("trip", owner.token, null, "owner", sharing)
+    ).toMatchObject({ owner: true, audience: "session" })
+    expect(store.findLink("trip", owner.token)?.owner).toBe(false)
     const member = store.authorize(
       "trip",
       token,
@@ -164,6 +168,7 @@ describe("durable app sharing", () => {
       sharing
     )!
     expect(member).toMatchObject({
+      owner: false,
       mode: "edit",
       canMessage: true,
       viewerEmail: "wife@test.com",

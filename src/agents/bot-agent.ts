@@ -99,6 +99,7 @@ import {
   SERVER_WRITE_LIMITS,
   authorizeCaller,
   callerDataMode,
+  refreshAppCaller,
   hideReceipts,
   isReceiptId,
   takeSubmitSlot,
@@ -1376,11 +1377,11 @@ export class BotAgent extends Think<Env, BotState> {
     const policy = cls ? (this.state.rules[cls] ?? DEFAULT_RULES[cls]) : "allow"
     if (this.#appToolNames.has(toolName))
       return sharedConnectionRule(
-          policy,
-          this.sharing().isolated,
-          this.#readOnlyAppTools.has(toolName),
-          false
-        )
+        policy,
+        this.sharing().isolated,
+        this.#readOnlyAppTools.has(toolName),
+        false
+      )
     return policy === "ask" && SHOP_READS.has(toolName) ? "allow" : policy
   }
 
@@ -2963,7 +2964,7 @@ export class BotAgent extends Think<Env, BotState> {
       input.appTools === null ? null : undefined
     if (input.appTools) {
       try {
-        const catalog: AppCatalog = await (await this.hub()).appCatalog()
+        const catalog = await this.sharedAppCatalog()
         tools = resolveGrants(input.appTools, catalog.tools, (t) =>
           appToolName(t.connectionId, t.name)
         )
@@ -3220,6 +3221,10 @@ export class BotAgent extends Think<Env, BotState> {
     name: string,
     args: unknown
   ): Promise<{ value: unknown } | { error: string; status: number }> {
+    const currentCaller = await this.currentAppCaller(slug, caller)
+    if (!currentCaller || !currentCaller.server)
+      return { error: "Access revoked", status: 403 }
+    caller = currentCaller
     const app = this.apps.get(slug)
     if (!app) return { error: "Not found", status: 404 }
     // Allowing an app's tools in the Apps tab is the "ask first"; a block
@@ -3230,8 +3235,7 @@ export class BotAgent extends Think<Env, BotState> {
         status: 403,
       }
     }
-    const hub = await this.hub()
-    const catalog: AppCatalog = await hub.appCatalog()
+    const catalog = await this.sharedAppCatalog()
     const decision = decideToolCall({
       name,
       args,
@@ -3259,6 +3263,8 @@ export class BotAgent extends Think<Env, BotState> {
       return { error: decision.error, status: decision.status }
     }
     const { grant, tool, reads } = decision
+    if (caller.mode === "view" && !reads)
+      return { error: "This link is view-only", status: 403 }
     const entry: AppToolCallLog = {
       at: Date.now(),
       name: grant.name,
@@ -3292,7 +3298,13 @@ export class BotAgent extends Think<Env, BotState> {
       }
     }
     try {
-      const value = await hub.callAppTool(
+      // Catalog lookup crosses an RPC boundary; recheck revocation and owner
+      // approval before dispatching, including long-lived app-server bindings.
+      if (!(await this.currentAppCaller(slug, caller)))
+        return { error: "Access revoked", status: 403 }
+      if (!this.apps.get(slug)?.approvedTools.includes(approvalKey(grant)))
+        return { error: "Tool approval revoked", status: 403 }
+      const value = await this.callSharedAppTool(
         tool.connectionId,
         tool.name,
         args as Record<string, unknown>
@@ -3367,20 +3379,33 @@ export class BotAgent extends Think<Env, BotState> {
   }
 
   /** Durable Object RPC from `env.BOT.tools()`: what server.js may call. */
-  async appToolList(slug: string) {
+  async appToolList(slug: string, caller: AppCaller) {
+    const current = await this.currentAppCaller(slug, caller)
+    if (!current?.server) throw new Error("Access revoked")
     const app = this.apps.get(slug)
     if (!app) return []
+    const catalog = await this.sharedAppCatalog()
+    if (!(await this.currentAppCaller(slug, current)))
+      throw new Error("Access revoked")
+    const visible = new Set(
+      catalog.tools.map((t) => appToolName(t.connectionId, t.name))
+    )
     const allowed = new Set(
       approvedGrants(app.tools, app.approvedTools).map((g) => g.name)
     )
-    return app.tools.map((g) => ({
-      name: g.name,
-      app: g.app,
-      tool: g.tool,
-      readOnly: g.readOnly,
-      ...(g.only ? { only: g.only } : {}),
-      allowed: allowed.has(g.name),
-    }))
+    return app.tools
+      .filter((g) => visible.has(g.name))
+      .map((g) => ({
+        name: g.name,
+        app: g.app,
+        tool: g.tool,
+        readOnly: g.readOnly,
+        ...(g.only ? { only: g.only } : {}),
+        allowed:
+          allowed.has(g.name) &&
+          (this.state.rules.apps ?? DEFAULT_RULES.apps) !== "block" &&
+          (current.mode !== "view" || g.readOnly),
+      }))
   }
 
   /** Queue an edit someone made in an app; the bot hears about it in a batch. */
@@ -3662,6 +3687,13 @@ export class BotAgent extends Think<Env, BotState> {
     return this.apps.authorize(slug, token, viewer, this.userId, this.sharing())
   }
 
+  private async currentAppCaller(slug: string, caller: AppCaller) {
+    const grant = caller.token
+      ? await this.authorizeAppLink(slug, caller.token, null)
+      : null
+    return refreshAppCaller(caller, grant)
+  }
+
   /** Durable Object RPC from the Worker: one request to an app. */
   async serveApp(
     slug: string,
@@ -3835,18 +3867,9 @@ export class BotAgent extends Think<Env, BotState> {
   ): Promise<{ value: unknown } | { error: string; status: number }> {
     const app = this.apps.get(slug)
     if (!app) return { error: "Not found", status: 404 }
-    if (caller.token) {
-      const grant = await this.authorizeAppLink(slug, caller.token, null)
-      if (!grant) return { error: "Access revoked", status: 403 }
-      // Permissions come from the current grant, not a cached app-server
-      // binding. Existing member sessions gain collaboration rights too.
-      caller = {
-        ...caller,
-        label: grant.label,
-        mode: grant.mode,
-        canMessage: grant.canMessage,
-      }
-    }
+    const currentCaller = await this.currentAppCaller(slug, caller)
+    if (!currentCaller) return { error: "Access revoked", status: 403 }
+    caller = currentCaller
     const decision = authorizeCaller(caller, app.access, op)
     if (!decision.ok) {
       return { error: decision.error, status: decision.status }
@@ -6555,14 +6578,9 @@ export class BotAgent extends Think<Env, BotState> {
     }
     // A form can wake this bot now or after a republish. Isolate its context
     // before accepting any public submissions, like other external messages.
-    if (parsed.canMessage || safe === "submit") await this.enableSharingIsolation()
-    return this.apps.createLink(
-      slug,
-      name,
-      safe,
-      false,
-      parsed
-    )
+    if (parsed.canMessage || safe === "submit")
+      await this.enableSharingIsolation()
+    return this.apps.createLink(slug, name, safe, false, parsed)
   }
 
   /** The user allows every tool the app asks for, as they are now. */

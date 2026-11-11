@@ -136,7 +136,10 @@ export function appOperationDenied(
 ): string | null {
   if ((op === "tell" || op === "error") && !caller.canMessage)
     return "Messaging the bot is disabled for this link"
-  if ((op === "put" && caller.mode === "view") || (op === "remove" && caller.mode !== "edit"))
+  if (
+    (op === "put" && caller.mode === "view") ||
+    (op === "remove" && caller.mode !== "edit")
+  )
     return "This link is view-only"
   return null
 }

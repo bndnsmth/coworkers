@@ -85,9 +85,19 @@ Open **Computer → Apps**, select the app, and create a sharing link:
   described above, because external messages can influence the bot's next turn.
 
 An app link grants no access to the bot's conversation, workspace, settings,
-connections, or other apps. App server code has no internet access and receives
-only an app-scoped data binding. Its writes and messages are checked using the
-same permissions as direct data API requests, even on GET server routes.
+or other apps. App server code has no internet access. Its app-scoped binding
+can use explicitly approved connected-app tools, limited to the isolated bot's
+connection allowlist. The owner approves each tool and its scope in Apps;
+changed grants require approval again. Removing a connection or revoking a
+link stops subsequent tool calls, including calls from cached server bindings.
+View-only links and bot GET checks cannot invoke writing tools.
+
+Public-form links retain upstream's submission/receipt rules. Their server.js
+backend can manage the app's data; ordinary view-only links remain read-only
+even through server routes. Form creation isolates the bot before submissions
+can wake it. Direct bot messaging still requires its own explicit permission.
+Published app tool approvals are owner preapprovals; agent-driven connected
+writes still use the per-action owner approval flow described above.
 
 Use **Revoke** to end a link and its active sessions/sockets. To change an app
 link's permissions, revoke it and create a replacement. This deliberately

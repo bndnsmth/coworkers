@@ -429,6 +429,12 @@ export class AppStore {
   ): AppLink | null {
     const link = this.findLink(slug, token)
     if (!link) return null
+    // Keep owner sessions scoped in storage, while retaining the owner's
+    // rate-limit exemption when returning an authorized capability.
+    if (link.audience === "session" && !link.viewerEmail && link.parentToken) {
+      const parent = this.findLink(slug, link.parentToken)
+      if (parent?.audience === "owner") return { ...link, owner: true }
+    }
     if (link.audience === "session" && link.viewerEmail && link.parentToken) {
       const parent = this.findLink(slug, link.parentToken)
       if (

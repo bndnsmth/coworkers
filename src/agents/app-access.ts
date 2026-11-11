@@ -78,8 +78,27 @@ export function callerDataMode(caller: AppCaller): AppLink["mode"] {
   return caller.server && caller.mode === "submit" ? "edit" : caller.mode
 }
 
+/** Rebind cached server capabilities to the current, authorized link. */
+export function refreshAppCaller(
+  caller: AppCaller,
+  grant: AppLink | null
+): AppCaller | null {
+  if (!caller.token || !grant || grant.token !== caller.token) return null
+  return {
+    ...caller,
+    label: grant.label,
+    mode: grant.mode,
+    canMessage: grant.canMessage,
+    owner: grant.owner,
+  }
+}
+
 /** Keep independent edit/message grants when applying public-form rules. */
-export function authorizeCaller(caller: AppCaller, access: AppAccess, op: AppDataOp): Decision {
+export function authorizeCaller(
+  caller: AppCaller,
+  access: AppAccess,
+  op: AppDataOp
+): Decision {
   const mode = callerDataMode(caller)
   const denial = appOperationDenied({ ...caller, mode }, op.op)
   if (denial) return deny(denial)

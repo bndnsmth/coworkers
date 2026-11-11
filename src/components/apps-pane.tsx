@@ -19,7 +19,12 @@ import { Group, Row } from "@/components/group"
 import { useBot } from "@/lib/bot-context"
 import type { BotConnection } from "@/lib/bot-context"
 import { approvalKey } from "@/lib/types"
-import type { AppLink, AppToolGrant, BotAppDetail, BotAppSummary } from "@/lib/types"
+import type {
+  AppLink,
+  AppToolGrant,
+  BotAppDetail,
+  BotAppSummary,
+} from "@/lib/types"
 
 const MODE_LABELS: Record<AppLink["mode"], string> = {
   edit: "Can edit",
@@ -132,7 +137,13 @@ const THUMB_WIDTH = 880
 const THUMB_HEIGHT = 550
 
 /** A live, non-interactive render of the app, scaled to the card. */
-function AppThumbnail({ app, path }: { app: BotAppSummary & { approvedTools?: string[] }; path?: string }) {
+function AppThumbnail({
+  app,
+  path,
+}: {
+  app: BotAppSummary & { approvedTools?: string[] }
+  path?: string
+}) {
   const [scale, setScale] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const frame = useRef<HTMLDivElement>(null)
@@ -506,8 +517,8 @@ function AppDetail({
           {audience === "email"
             ? "Only the invited email can sign in and open this link."
             : mode === "submit"
-            ? "Anyone with this link can fill in the form without signing in. They can't see other entries, and can send a few per hour."
-            : "Anyone with a link can open the app without signing in, so share it like a password. Edits reach the bot under that person's name."}
+              ? "Anyone with this link can fill in the form without signing in. They can't see other entries, and can send a few per hour."
+              : "Anyone with a link can open the app without signing in, so share it like a password. Edits reach the bot under that person's name."}
         </p>
       </div>
 
