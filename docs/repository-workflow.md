@@ -17,8 +17,7 @@ Cloudflare Worker or its data.
 | `feature/appearance` | Based on `main`; System/Light/Dark and themed workspace |
 | `feature/private-app-sharing` | Based on `main`; private links, guest permissions, isolation and shared authorization backend |
 | `feature/shared-bots` | Based on private-app-sharing; invitations, discovery, member chat and scoped Browser/Terminal/Files/Apps/Activity |
-| `deploy/production` | Currently deployed application source, plus this workflow document |
-| `deploy/candidate` | All nine upstream commits, all three feature branches, and production configuration support; not deployed |
+| `deploy/production` | All nine upstream commits, all three features, and production configuration support; the deployed release line and primary working branch |
 | `archive/production-2026-11-11` | Exact deployed-source checkpoint `8c7eb51` |
 | `archive/standalone-main` | Original standalone main `ae88463` |
 | `integrate/upstream-2026-11-11` | Preserved integration and permission reconciliation history |
@@ -35,16 +34,20 @@ been opened.
 - Host: <https://bots.bndnsmth.app>
 - Cloudflare account: `cb7da3b78621686797c6fa870a606975`
 - Worker name: `coworkers`
-- Live version: `df4a0fce-51f5-4c86-bd39-03a2f5f07f76`, verified at 100% traffic
-- Source checkpoint: `8c7eb51b347b821507cc9e065ef76c07e9a97bfa`
+- Live version: `81fe2c9c-446b-4326-9d15-bced29801ebd`
+- Application source: `15c507e` (later documentation-only commits may follow)
+- Accepted upstream integration: `8429c54`, deployed as
+  `5b247091-b95b-40be-b784-af44e9471367` and smoke-tested by the owner
+- Pre-integration version: `df4a0fce-51f5-4c86-bd39-03a2f5f07f76`, source `8c7eb51`
 
-The migration performed no Worker deployment, storage migration, Access policy
-change, binding replacement, or resource creation/deletion. Production retains
-its existing Durable Object classes and namespaces. A GitHub rename does not
-move the Cloudflare data.
+The initial repository migration performed no Worker deployment or resource
+changes. The subsequent candidate deployment updated the existing Worker, and
+the owner accepted its smoke test. Production retains the existing account,
+domain, Durable Object classes and namespaces. The send/stop contrast fix was
+then merged from `feature/appearance` and deployed from `deploy/production`.
 
 `coworkers.deploy.json` and `.dev.vars.production` remain ignored and local.
-The candidate keeps the same account/domain configuration support. Never put
+Production keeps the same account/domain configuration support. Never put
 secret values or deployment credentials in a contribution branch.
 
 ## Daily contribution workflow
@@ -71,15 +74,15 @@ against upstream `main`. Submit shared-bots after private-app-sharing lands,
 rebasing onto the accepted version so its PR contains only the remaining feature.
 Keep production composition on the deployment line, not on `main`.
 
-## Compose and promote a release
+## Compose and deploy a release
 
-`deploy/candidate` already combines the three branches. Its application source
-was compared byte-for-byte with the validated integration before recording the
-old production commit as an ancestor. It can be promoted by fast-forward when
-the release is actually ready.
+`deploy/production` is the single deployment line. The temporary
+`deploy/candidate` branch was promoted after the owner's smoke test and removed.
+Its commits remain in production history. The primary checkout stays on
+`deploy/production`; feature work belongs on the relevant contribution branch.
 
 For subsequent updates, merge upstream and the relevant feature branches into
-the candidate, resolve conflicts there, and run:
+`deploy/production`, resolve conflicts, and run:
 
 ```bash
 pnpm test
@@ -88,14 +91,14 @@ pnpm build --mode production
 pnpm exec cf deploy --dry-run --prebuilt --mode production
 ```
 
-Deploy the reviewed candidate using the existing local production inputs.
-Only after the deployment succeeds should `deploy/production` advance to that
-exact candidate commit. Record the resulting Worker version here. Keep the
-previous production reference for recovery; do not force-push either deployment
-branch. Preserve the Worker name, account, Durable Object classes and bindings.
+Deploy the reviewed production commit using the existing local production
+inputs. Record its source commit and resulting Worker version here after the
+deployment succeeds. Keep the previous release reference for recovery; do not
+force-push the production branch. Preserve the Worker name, account, Durable
+Object classes and bindings. No permanent candidate branch is needed.
 
 When upstream accepts a feature, reconcile the accepted implementation on the
-candidate and verify it before retiring its feature branch. Upstream may squash
+production line and verify it before retiring its feature branch. Upstream may squash
 or rework a PR, so shared Git ancestry alone is not proof that behavior matches.
 
 ## Validation and recovery from this migration
@@ -106,9 +109,15 @@ production dry run. Chromium checks passed desktop/mobile-width Appearance,
 first paint, saved preferences, OS changes, menus, file trees/diffs, dark
 terminal, and offline fallback, with no browser exceptions.
 
-Two-real-identity sharing acceptance and native iOS/Android launch checks remain
-pending. The new connected services were not exercised against live accounts.
-The candidate is saved separately from production for that reason.
+The owner smoke-tested the deployed integration and reported that everything
+was working. Exhaustive two-real-identity sharing and native iOS/Android launch
+checks were not performed by the agent. The new connected services were not
+exercised against live accounts by the agent.
+
+The follow-up ink-button fix was checked in Chromium at desktop and phone
+widths in light and dark modes, including send, stop, hover and disabled states.
+The production build passed. The fix lives on `feature/appearance` and is
+merged into the production line.
 
 The pre-existing `pnpm-workspace.yaml` edit contains unfinished build-approval
 placeholders. It is preserved locally and was not committed. Validation used
@@ -123,4 +132,4 @@ Local recovery bundle and original merge/index/worktree snapshot:
 
 That directory is private (0700) and contains ignored deployment inputs. Do not
 upload it. Git-only archive branches are pushed to the fork. The validation
-worktree is `/mnt/data/Dev/oss/coworkers-contributions`, on `deploy/candidate`.
+worktree is `/mnt/data/Dev/oss/coworkers-contributions`, on `feature/appearance`.
