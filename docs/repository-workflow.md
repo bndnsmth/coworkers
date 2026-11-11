@@ -46,8 +46,9 @@ cross-references the overlapping upstream theme proposals #20 and #22.
 - Host: <https://bots.bndnsmth.app>
 - Cloudflare account: `cb7da3b78621686797c6fa870a606975`
 - Worker name: `coworkers`
-- Live version: `81fe2c9c-446b-4326-9d15-bced29801ebd`
-- Application source: `15c507e` (later documentation-only commits may follow)
+- Live version: `a247cf65-34b5-4b3b-a82b-482f0ee072b1`, verified at 100% traffic
+- Application source: `7146d56` (later documentation-only commits may follow)
+- Previous release: `81fe2c9c-446b-4326-9d15-bced29801ebd`, source `15c507e`
 - Accepted upstream integration: `8429c54`, deployed as
   `5b247091-b95b-40be-b784-af44e9471367` and smoke-tested by the owner
 - Pre-integration version: `df4a0fce-51f5-4c86-bd39-03a2f5f07f76`, source `8c7eb51`
@@ -57,6 +58,20 @@ changes. The subsequent candidate deployment updated the existing Worker, and
 the owner accepted its smoke test. Production retains the existing account,
 domain, Durable Object classes and namespaces. The send/stop contrast fix was
 then merged from `feature/appearance` and deployed from `deploy/production`.
+
+All five initial sharing PR review findings were subsequently fixed and deployed
+from `7146d56`. Private-app fixes are in `64e43e5` (#23): trusted server markers
+for connected tools, correctly escaped session redirects, and account selection
+in the app-sharing flow. Shared-chat fixes are in `11ffd01` (#25): standard
+choice cards with member-scoped answers and working suggested-action buttons.
+The shared-bots branch includes the prerequisite fixes. Review replies and fresh
+Codex review requests are posted on both PRs.
+
+Release checks: 458 tests, TypeScript, production build and prebuilt deployment
+dry run passed. Post-deploy checks confirmed Access redirects for the main UI,
+shared chat and agent routes, a 404 for an unknown app, and successful manifest
+and service-worker responses. The production config and secrets files are
+unchanged. Two-real-identity end-to-end acceptance remains unverified.
 
 `coworkers.deploy.json` and `.dev.vars.production` remain ignored and local.
 Production keeps the same account/domain configuration support. Never put
