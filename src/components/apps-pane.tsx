@@ -139,7 +139,7 @@ function AppThumbnail({ app, path }: { app: BotAppSummary; path?: string }) {
   return (
     <div
       ref={frame}
-      className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-kumo-recessed shadow-[0_1px_2px_oklch(0_0_0/0.04),0_2px_8px_oklch(0_0_0/0.04)] outline outline-1 -outline-offset-1 outline-black/[0.06] transition-shadow duration-150 ease-out group-hover:shadow-[0_1px_2px_oklch(0_0_0/0.06),0_6px_16px_oklch(0_0_0/0.08)]"
+      className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-kumo-recessed shadow-[0_1px_2px_oklch(0_0_0/0.04),0_2px_8px_oklch(0_0_0/0.04)] outline outline-1 -outline-offset-1 outline-kumo-line transition-shadow duration-150 ease-out group-hover:shadow-[0_1px_2px_oklch(0_0_0/0.06),0_6px_16px_oklch(0_0_0/0.08)]"
     >
       <span
         aria-hidden
@@ -206,7 +206,7 @@ export function SharedAppsPane({
             Open
           </Button>
         </div>
-        <div className="mx-4 min-h-[480px] flex-1 overflow-hidden rounded-2xl bg-white outline outline-1 -outline-offset-1 outline-black/[0.06]">
+        <div className="mx-4 min-h-[480px] flex-1 overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-kumo-line">
           <iframe
             key={app.version}
             title={`${app.name} preview`}
@@ -350,7 +350,7 @@ function AppDetail({
       </div>
 
       {owner ? (
-        <div className="mx-4 aspect-[16/10] shrink-0 overflow-hidden rounded-2xl bg-white outline outline-1 -outline-offset-1 outline-black/[0.06]">
+        <div className="mx-4 aspect-[16/10] shrink-0 overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-kumo-line">
           <iframe
             key={app.version}
             title={`${app.name} preview`}
@@ -370,7 +370,7 @@ function AppDetail({
         <h4 className="px-1.5 text-sm font-medium text-kumo-default">
           Access and sharing
         </h4>
-        <ul className="overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-black/[0.06]">
+        <ul className="overflow-hidden rounded-2xl bg-kumo-base outline outline-1 -outline-offset-1 outline-kumo-line">
           {owner ? (
             <PersonRow
               name="You"

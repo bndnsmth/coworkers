@@ -5,8 +5,10 @@ import { ModelsSettings } from "@/components/models-settings"
 import { SidebarToggle } from "@/components/page-header"
 import { SlidingTabs } from "@/components/sliding-tabs"
 import { SpendSettings } from "@/components/spend-settings"
+import { ThemeSettings } from "@/components/theme-settings"
 
 const TABS = [
+  { value: "appearance", label: "Appearance" },
   { value: "models", label: "Models" },
   { value: "connections", label: "Connections" },
   { value: "spend", label: "Spend" },
@@ -19,7 +21,8 @@ export const Route = createFileRoute("/_app/settings")({
   validateSearch: (
     search: Record<string, unknown>
   ): { tab?: Tab; error?: string } => ({
-    ...(search.tab === "connections" ||
+    ...(search.tab === "appearance" ||
+    search.tab === "connections" ||
     search.tab === "spend" ||
     search.tab === "agents"
       ? { tab: search.tab }
@@ -44,7 +47,7 @@ function Settings() {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[640px] space-y-8 px-4 pt-4 pb-16 md:px-6">
-          <div className="flex justify-center">
+          <div className="flex [scrollbar-width:none] overflow-x-auto md:justify-center">
             <SlidingTabs
               tabs={[...TABS]}
               value={tab}
@@ -56,7 +59,9 @@ function Settings() {
               }
             />
           </div>
-          {tab === "models" ? (
+          {tab === "appearance" ? (
+            <ThemeSettings />
+          ) : tab === "models" ? (
             <ModelsSettings />
           ) : tab === "spend" ? (
             <SpendSettings />
