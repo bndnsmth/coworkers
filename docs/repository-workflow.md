@@ -16,18 +16,19 @@ Cloudflare Worker or its data.
 | `main` | Clean upstream mirror; currently `6d2cf8d` |
 | `feature/appearance` | Based on `main`; System/Light/Dark and themed workspace |
 | `feature/private-app-sharing` | Based on `main`; private links, guest permissions, isolation and shared authorization backend |
-| `feature/shared-bots` | Based on private-app-sharing; invitations, discovery and member chat |
-| `feature/shared-computer` | Based on shared-bots; scoped Browser/Terminal/Files/Apps/Activity |
+| `feature/shared-bots` | Based on private-app-sharing; invitations, discovery, member chat and scoped Browser/Terminal/Files/Apps/Activity |
 | `deploy/production` | Currently deployed application source, plus this workflow document |
-| `deploy/candidate` | All nine upstream commits, all four feature branches, and production configuration support; not deployed |
+| `deploy/candidate` | All nine upstream commits, all three feature branches, and production configuration support; not deployed |
 | `archive/production-2026-11-11` | Exact deployed-source checkpoint `8c7eb51` |
 | `archive/standalone-main` | Original standalone main `ae88463` |
 | `integrate/upstream-2026-11-11` | Preserved integration and permission reconciliation history |
 
-Appearance and private-app-sharing can be reviewed independently. The other
-sharing branches are stacked: compare shared-bots against private-app-sharing,
-and shared-computer against shared-bots. Do not submit the combined deployment
-branch upstream. No upstream pull requests were opened during the migration.
+Appearance and private-app-sharing can be reviewed independently. Shared bots
+builds on private-app-sharing and includes both chat and computer access in one
+branch. Compare shared-bots against private-app-sharing. The former separate
+shared-computer branch was consolidated into shared-bots without changing code.
+Do not submit the combined deployment branch upstream. No pull requests have
+been opened.
 
 ## Current production record
 
@@ -65,14 +66,14 @@ git switch -c feature/example main
 git push -u origin feature/example
 ```
 
-Submit Appearance and private-app-sharing against upstream `main`. Submit the
-dependent sharing branches after their prerequisites land, rebasing each onto
-the accepted upstream version so its PR contains only the remaining feature.
+If contributing upstream later, submit Appearance and private-app-sharing
+against upstream `main`. Submit shared-bots after private-app-sharing lands,
+rebasing onto the accepted version so its PR contains only the remaining feature.
 Keep production composition on the deployment line, not on `main`.
 
 ## Compose and promote a release
 
-`deploy/candidate` already combines the four branches. Its application source
+`deploy/candidate` already combines the three branches. Its application source
 was compared byte-for-byte with the validated integration before recording the
 old production commit as an ancestor. It can be promoted by fast-forward when
 the release is actually ready.
